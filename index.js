@@ -36,6 +36,7 @@ async function run ()
     const propertyCollection = client.db( "realestateDB" ).collection( "properties" );
     const wishlistCollection = client.db("realestateDB").collection("wishlist");
     const reviewsCollection = client.db("realestateDB").collection("reviews");
+    
 
 
 
@@ -99,43 +100,7 @@ async function run ()
     } );
     ;
 
-    // POST method to add a property to the wishlist
-    app.post('/wishlist', verifyToken, async (req, res) => {
-      try {
-        const wishlistItem = req.body;
-        wishlistItem.userEmail = req.decoded.email;  // Assuming userEmail is stored in token
-        const result = await wishlistCollection.insertOne(wishlistItem);
-        res.status(201).json(result);
-      } catch (error) {
-        console.error('Error adding to wishlist:', error);
-        res.status(500).json({ message: 'Internal Server Error' });
-      }
-    });
 
-    // POST method to add a review for a property
-    app.post('/reviews', verifyToken, async (req, res) => {
-      try {
-        const review = req.body;
-        review.userEmail = req.decoded.email;  // Assuming userEmail is stored in token
-        const result = await reviewsCollection.insertOne(review);
-        res.status(201).json(result);
-      } catch (error) {
-        console.error('Error adding review:', error);
-        res.status(500).json({ message: 'Internal Server Error' });
-      }
-    });
-
-    // GET method to fetch reviews for a specific property
-    app.get('/reviews/:propertyId', async (req, res) => {
-      try {
-        const propertyId = req.params.propertyId;
-        const reviews = await reviewsCollection.find({ propertyId }).toArray();
-        res.status(200).json(reviews);
-      } catch (error) {
-        console.error('Error fetching reviews:', error);
-        res.status(500).json({ message: 'Internal Server Error' });
-      }
-    });
 
 
     // await client.db( "admin" ).command( { ping: 1 } );
