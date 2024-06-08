@@ -100,6 +100,20 @@ async function run ()
     } );
     ;
 
+     // POST method to add a property to the wishlist
+     app.post('/wishlist', verifyToken, async (req, res) => {
+      try {
+        const wishlistItem = req.body;
+        wishlistItem.userEmail = req.decoded.email;  // Assuming userEmail is stored in token
+        const result = await wishlistCollection.insertOne(wishlistItem);
+        res.status(201).json(result);
+      } catch (error) {
+        console.error('Error adding to wishlist:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+      }
+    });
+
+
 
 
 
