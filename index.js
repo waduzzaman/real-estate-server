@@ -113,6 +113,19 @@ async function run ()
       }
     });
 
+       // POST method to add a review for a property
+       app.post('/reviews', verifyToken, async (req, res) => {
+        try {
+          const review = req.body;
+          review.userEmail = req.decoded.email;  // Assuming userEmail is stored in token
+          const result = await reviewsCollection.insertOne(review);
+          res.status(201).json(result);
+        } catch (error) {
+          console.error('Error adding review:', error);
+          res.status(500).json({ message: 'Internal Server Error' });
+        }
+      });
+
 
 
 
