@@ -1,3 +1,14 @@
+
+// Naming Convention: 
+// app.get('/users')
+// app.get('/users/:id')
+// app.post('/users')
+// app.put('/users/:id')
+// app.patch('/users/:id')
+// app.delete('/users/:id')
+
+
+
 const express = require( 'express' );
 const app = express();
 const cors = require( 'cors' );
@@ -8,11 +19,21 @@ require( 'dotenv' ).config();
 const port = process.env.PORT || 5000;
 
 // middleware
-app.use( cors() );
+app.use(
+  cors( {
+    origin: [
+      "http://localhost:5173",
+      "https://real-estate-server-nu.vercel.app/",
+      "https://real-estate-client-b69c6.firebaseapp.com/",
+      "https://real-estate-client-b69c6.web.app/"
+    ],
+    credentials: true,
+  } )
+);
 app.use( express.json() );
 
 
-const { MongoClient, ServerApiVersion } = require( 'mongodb' );
+const { MongoClient, ServerApiVersion, ObjectId } = require( 'mongodb' );
 const uri = `mongodb+srv://${ process.env.DB_USER }:${ process.env.DB_PASS }@cluster0.nrvepld.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -34,9 +55,10 @@ async function run ()
 
     //============================Database Collections=====================================//
     const propertyCollection = client.db( "realestateDB" ).collection( "properties" );
-    const wishlistCollection = client.db("realestateDB").collection("wishlist");
-    const reviewsCollection = client.db("realestateDB").collection("reviews");
-    
+    // const detailsCollection = client.db( 'realestateDB' ).collection( "details" );
+    const wishlistCollection = client.db( "realestateDB" ).collection( "wishlist" );
+    const reviewsCollection = client.db( "realestateDB" ).collection( "reviews" );
+    const userCollection = client.db( "realestateDB" ).collection( 'users' );
 
 
 
@@ -73,14 +95,32 @@ async function run ()
     {
       const email = req.decoded.email;
       const query = { email: email };
-      const user = await userCollection.findOne( query );
+      const user = await usersCollection.findOne( query );
       const isAdmin = user?.role === 'admin';
       if ( !isAdmin )
       {
         return res.status( 403 ).send( { message: 'forbidden access' } );
       }
       next();
+
     }
+
+
+
+    // POST method to create a new user
+    app.post('/users', async (req, res) => {
+      const user = req.body;
+      // insert email if user doesnt exists: 
+      // you can do this many ways (1. email unique, 2. upsert 3. simple checking)
+      const query = { email: user.email }
+      const existingUser = await userCollection.findOne(query);
+      if (existingUser) {
+        return res.send({ message: 'user already exists', insertedId: null })
+      }
+      const result = await userCollection.insertOne(user);
+      res.send(result);
+    });
+
 
 
     // GET method to fetch properties
@@ -100,31 +140,158 @@ async function run ()
     } );
     ;
 
-     // POST method to add a property to the wishlist
-     app.post('/wishlist', verifyToken, async (req, res) => {
-      try {
-        const wishlistItem = req.body;
-        wishlistItem.userEmail = req.decoded.email;  // Assuming userEmail is stored in token
-        const result = await wishlistCollection.insertOne(wishlistItem);
-        res.status(201).json(result);
-      } catch (error) {
-        console.error('Error adding to wishlist:', error);
-        res.status(500).json({ message: 'Internal Server Error' });
-      }
-    });
+    // post method to wishlist: 
 
-       // POST method to add a review for a property
-       app.post('/reviews', verifyToken, async (req, res) => {
-        try {
-          const review = req.body;
-          review.userEmail = req.decoded.email;  // Assuming userEmail is stored in token
-          const result = await reviewsCollection.insertOne(review);
-          res.status(201).json(result);
-        } catch (error) {
-          console.error('Error adding review:', error);
-          res.status(500).json({ message: 'Internal Server Error' });
+    app.post( '/wishlist', async ( req, res ) =>
+    {
+      const item = req.body;
+      const result = await wishlistCollection.insertOne( item );
+      console.log( result );
+      res.send( result );
+    } );
+
+
+    app.get( '/wishlist', async ( req, res ) =>
+    {
+      try
+      {
+        // const userEmail = req.decoded.email; 
+        const wishlistItems = await wishlistCollection.find().toArray();
+        res.status( 200 ).json( wishlistItems );
+        console.log( wishlistItems );
+      } catch ( error )
+      {
+        console.error( 'Error fetching wishlist items:', error );
+        res.status( 500 ).json( { message: 'Internal Server Error' } );
+      }
+    } );
+
+    // DELETE method to remove a wishlist item by propertyId
+    app.delete( '/wishlist/:propertyId', async ( req, res ) =>
+    {
+      const { propertyId } = req.params;
+
+      try
+      {
+        const result = await wishlistCollection.deleteOne( { propertyId } );
+        if ( result.deletedCount === 1 )
+        {
+          res.status( 200 ).json( { message: 'Wishlist item deleted successfully' } );
+        } else
+        {
+          res.status( 404 ).json( { message: 'Wishlist item not found' } );
         }
-      });
+      } catch ( error )
+      {
+        console.error( 'Error deleting wishlist item:', error );
+        res.status( 500 ).json( { message: 'Internal Server Error' } );
+      }
+    } );
+
+
+
+    // Post method to add a review
+    app.post( '/reviews', async ( req, res ) =>
+    {
+      try
+      {
+        const review = req.body;
+        const result = await reviewsCollection.insertOne( review );
+        res.status( 201 ).json( result );
+      } catch ( error )
+      {
+        console.error( 'Error adding review:', error );
+        res.status( 500 ).json( { message: 'Internal Server Error' } );
+      }
+    } );
+
+    app.get( '/reviews', async ( req, res ) =>
+    {
+      try
+      {
+
+        const reviewsItems = await reviewsCollection.find().toArray();
+        res.status( 200 ).json( reviewsItems );
+        console.log( reviewsItems );
+      } catch ( error )
+      {
+        console.error( 'Error fetching reviews:', error );
+        res.status( 500 ).json( { message: 'Internal Server Error' } );
+      }
+    } );
+
+
+    // Delete a review by ID
+    app.delete( '/reviews/:id', async ( req, res ) =>
+    {
+      try
+      {
+        const reviewId = req.params.id;
+        const result = await reviewsCollection.deleteOne( { _id: new ObjectId( reviewId ) } );
+        if ( result.deletedCount === 1 )
+        {
+          res.status( 200 ).json( { message: 'Review deleted successfully' } );
+        } else
+        {
+          res.status( 404 ).json( { message: 'Review not found' } );
+        }
+      } catch ( error )
+      {
+        console.error( 'Error deleting review:', error );
+        res.status( 500 ).json( { message: 'Internal Server Error' } );
+      }
+    } );
+
+
+
+
+
+    // // Get method to fetch reviews based on property ID or user email
+    // app.get('/reviews', async (req, res) => {
+    //   try {
+    //     const { propertyId, userEmail } = req.query;
+    //     let query = {};
+    //     if (propertyId) query.propertyId = propertyId;
+    //     if (userEmail) query.userEmail = userEmail;
+
+    //     const reviews = await reviewCollection.find(query).toArray();
+    //     res.status(200).json(reviews);
+    //   } catch (error) {
+    //     console.error('Error fetching reviews:', error);
+    //     res.status(500).json({ message: 'Internal Server Error' });
+    //   }
+    // });
+
+
+
+
+
+    // Get method to access one property 
+    app.get( '/properties/:id', async ( req, res ) =>
+    {
+      try
+      {
+        const id = req.params.id;
+
+        const query = { _id: new ObjectId( id ) }
+        const property = await propertyCollection.findOne( query );
+        // res.send(result);
+        // const property = await propertyCollection.findOne( { _id: new ObjectId( id ) } );
+
+        if ( !property )
+        {
+          return res.status( 404 ).json( { message: 'Property not found' } ); // Corrected message
+        }
+        res.status( 200 ).json( property );
+        // console.log( 'This is one property:', property );
+
+      } catch ( error )
+      {
+        console.error( 'Error fetching property:', error );
+        res.status( 500 ).json( { message: 'Internal Server Error' } );
+      }
+    } );
+
 
 
 
