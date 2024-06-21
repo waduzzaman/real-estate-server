@@ -1,28 +1,20 @@
 
-// Naming Convention: 
-// app.get('/users')
-// app.get('/users/:id')
-// app.post('/users')
-// app.put('/users/:id')
-// app.patch('/users/:id')
-// app.delete('/users/:id')
-
-
 
 const express = require( 'express' );
 const app = express();
 const cors = require( 'cors' );
 const jwt = require( 'jsonwebtoken' );
+const { MongoClient, ServerApiVersion, ObjectId } = require( 'mongodb' );
 require( 'dotenv' ).config();
-// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const port = process.env.PORT || 5000;
 
-// middleware
+// Middleware
 app.use(
   cors( {
     origin: [
       "http://localhost:5173",
+      "http://localhost:5000",
       "https://real-estate-server-nu.vercel.app/",
       "https://real-estate-client-b69c6.firebaseapp.com/",
       "https://real-estate-client-b69c6.web.app/"
@@ -32,8 +24,7 @@ app.use(
 );
 app.use( express.json() );
 
-
-const { MongoClient, ServerApiVersion, ObjectId } = require( 'mongodb' );
+// MongoDB URI
 const uri = `mongodb+srv://${ process.env.DB_USER }:${ process.env.DB_PASS }@cluster0.nrvepld.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -45,38 +36,45 @@ const client = new MongoClient( uri, {
   }
 } );
 
+
+
+// Async function to run server
 async function run ()
 {
   try
   {
-    // Connect the client to the server	(optional starting in v4.7)
-    // await client.connect();
-    // Send a ping to confirm a successful connection
+    // Connect to MongoDB
+    await client.connect();
+    console.log( "Connected to MongoDB" );
 
-    //============================Database Collections=====================================//
+    // Database Collections
     const propertyCollection = client.db( "realestateDB" ).collection( "properties" );
-    // const detailsCollection = client.db( 'realestateDB' ).collection( "details" );
     const wishlistCollection = client.db( "realestateDB" ).collection( "wishlist" );
-    const reviewsCollection = client.db( "realestateDB" ).collection( "reviews" );
+    const reviewCollection = client.db( "realestateDB" ).collection( "reviews" );
     const userCollection = client.db( "realestateDB" ).collection( 'users' );
+    const requestedOfferedCollection = client.db( "realestateDB" ).collection( "requestedOffered" );
+    
+    const  offerCollection = client.db( "realestateDB" ).collection( "offers" );
+
+    const paymentCollection = client.db("bistroDb").collection("payments");
+    
 
 
-
-    //=================================== JWT related api==================================//
+    // JWT related API
     app.post( '/jwt', async ( req, res ) =>
     {
       const user = req.body;
       const token = jwt.sign( user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' } );
       res.send( { token } );
-    } )
+    } );
 
-     //=================================== Middleware==================================//
+    // middlewares 
     const verifyToken = ( req, res, next ) =>
     {
       // console.log('inside verify token', req.headers.authorization);
       if ( !req.headers.authorization )
       {
-        return res.status( 401 ).send( { message: 'forbidden access' } );
+        return res.status( 401 ).send( { message: 'unauthorized access' } );
       }
       const token = req.headers.authorization.split( ' ' )[ 1 ];
       jwt.verify( token, process.env.ACCESS_TOKEN_SECRET, ( err, decoded ) =>
@@ -95,90 +93,119 @@ async function run ()
     {
       const email = req.decoded.email;
       const query = { email: email };
-      const user = await usersCollection.findOne( query );
+      const user = await userCollection.findOne( query );
       const isAdmin = user?.role === 'admin';
       if ( !isAdmin )
       {
         return res.status( 403 ).send( { message: 'forbidden access' } );
       }
       next();
-
+    }
+    const verifyAgent = async ( req, res, next ) =>
+    {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await userCollection.findOne( query );
+      const isAgent = user?.role === 'agent';
+      if ( !isAgent )
+      {
+        return res.status( 403 ).send( { message: 'forbidden access' } );
+      }
+      next();
     }
 
-  //users related api:
 
-  app.get('/users', verifyToken, verifyAdmin, async(req, res)=>{
-    
-    const result=await userCollection.find().toArray();
-    res.send(result);  
+    // Users related API
+    app.get( '/users', async ( req, res ) =>
+    {
+      const result = await userCollection.find().toArray();
+      res.send( result );
+    } );
 
-  })
-    // POST method to create a new user
-    app.post('/users', async (req, res) => {
+    app.get( '/users/admin/:email', verifyToken, async ( req, res ) =>
+    {
+      const email = req.params.email;
+
+      if ( email !== req.decoded.email )
+      {
+        return res.status( 403 ).send( { message: 'forbidden access' } )
+      }
+
+      const query = { email: email };
+      const user = await userCollection.findOne( query );
+      let admin = false;
+      if ( user )
+      {
+        admin = user?.role === 'admin';
+      }
+      res.send( { admin } );
+    } )
+
+
+    app.post( '/users', async ( req, res ) =>
+    {
       const user = req.body;
-      // insert email if user doesn't exists: 
-      // you can do this many ways (1. email unique, 2. upsert 3. simple checking)
-      const query = { email: user.email }
-      const existingUser = await userCollection.findOne(query);
-      if (existingUser) {
-        return res.send({ message: 'user already exists', insertedId: null })
+      const query = { email: user.email };
+      const existingUser = await userCollection.findOne( query );
+      if ( existingUser )
+      {
+        return res.send( { message: 'User already exists', insertedId: null } );
       }
-      const result = await userCollection.insertOne(user);
-      res.send(result);
-    });
+      const result = await userCollection.insertOne( user );
+      res.send( result );
+    } );
 
-    app.get('/user/admin/:email', verifyToken, async (req,res)=>{
-      const email=req.params.email;
-      if(email !== req.decoded.email){
-        return res.status(403).send({message:'forbidden access'})
-
-      }
-      const query={email:email};
-      const user =await userCollection.findOne(query);
-      let isAdmin=false;
-      if(user){
-        admin=user?.role==='admin';
-
-      }
-      res.send({admin});
-
-    })
-
-    // Make Admin: 
-    app.patch('/users/admin:id', verifyToken, verifyAdmin,async(req, res)=>{
-      const id=req.params.id;
-      const filter={_id: new ObjectId(id)}
-      const updateDoc={
-        $set:{
-          role:'admin'
-
+    // Change User Role API
+    app.patch( '/users/:id/role', verifyToken, verifyAdmin, async ( req, res ) =>
+    {
+      const id = req.params.id;
+      const { role } = req.body;
+      const filter = { _id: new ObjectId( id ) };
+      const updateDoc = {
+        $set: {
+          role: role
         }
+      };
+      const result = await userCollection.updateOne( filter, updateDoc );
+      res.send( result );
+    } );
 
+    // Delete User
+    app.delete( '/users/:id', verifyAdmin, verifyToken, async ( req, res ) =>
+    {
+      const id = req.params.id;
+      const query = { _id: new ObjectId( id ) };
+      const result = await userCollection.deleteOne( query );
+      res.send( result );
+    } );
+
+    //  fetch admin profile information
+    app.get( '/admin/profile', verifyAdmin, verifyToken, async ( req, res ) =>
+    {
+      try
+      {
+
+        const currentUser = req.user;
+        const adminInfo = {
+          userName: currentUser.displayName,
+          userImage: currentUser.userImage,
+          role: currentUser.role
+        };
+        res.status( 200 ).json( adminInfo );
+      } catch ( error )
+      {
+        console.error( 'Error fetching admin profile:', error );
+        res.status( 500 ).json( { message: 'Internal Server Error' } );
       }
-      const result=await userCollection.updateOne(filter, updateDoc)
-      res.send(result);
-
-    })
-
-    // delete user
-    app.delete('/users/:id', verifyToken, verifyAdmin,async (req, res)=>{
-      const id=req.params.id;
-      const query={_id: new ObjectId(id)}
-      const result=await userCollection.deleteOne(query);
-      res.send(result);
-
-    })
+    } );
 
 
-
-    // GET method to fetch properties
+    // Properties API
     app.get( '/properties', async ( req, res ) =>
     {
       try
       {
-        // console.log( 'Received request for properties' ); // Additional log
-        const properties = await propertyCollection.find( {} ).toArray();
-        // console.log( 'Properties fetched:', properties ); // Additional log
+        const properties = await propertyCollection.find().toArray();
         res.status( 200 ).json( properties );
       } catch ( error )
       {
@@ -186,20 +213,204 @@ async function run ()
         res.status( 500 ).json( { message: 'Internal Server Error' } );
       }
     } );
-    ;
 
-    // post method to wishlist: 
 
-    app.post( '/wishlist', async ( req, res ) =>
+    app.get( '/properties/:id', async ( req, res ) =>
     {
-      const item = req.body;
-      const result = await wishlistCollection.insertOne( item );
-      console.log( result );
-      res.send( result );
+      try
+      {
+        const id = req.params.id;
+        const query = { _id: new ObjectId( id ) };
+        const property = await propertyCollection.findOne( query );
+        if ( !property )
+        {
+          return res.status( 404 ).json( { message: 'Property not found' } );
+        }
+        res.status( 200 ).json( property );
+      } catch ( error )
+      {
+        console.error( 'Error fetching property:', error );
+        res.status( 500 ).json( { message: 'Internal Server Error' } );
+      }
+    } );
+
+    app.patch( '/properties/:id', async ( req, res ) =>
+    {
+      const { id } = req.params;
+      const { title, location, image, agentName, agentEmail, priceRange } = req.body;
+
+      const updatedProperty = {
+        ...( title && { title } ),
+        ...( location && { location } ),
+        ...( image && { image } ),
+        ...( agentName && { agentName } ),
+        ...( agentEmail && { agentEmail } ),
+        ...( priceRange && { priceRange } )
+      };
+
+      try
+      {
+        const result = await propertyCollection.findOneAndUpdate(
+          { _id: new ObjectId( id ) },
+          { $set: updatedProperty },
+          { returnOriginal: false }
+        );
+
+        if ( !result.value )
+        {
+          return res.status( 404 ).json( { message: 'Property not found' } );
+        }
+
+        res.status( 200 ).json( result.value );
+      } catch ( error )
+      {
+        console.error( 'Error updating property:', error );
+        res.status( 500 ).json( { message: 'Internal Server Error' } );
+      }
+    } );
+
+    // POST endpoint to add a new property
+    app.post( '/properties', async ( req, res ) =>
+    {
+      const { title, location, image, bedNumber, bathNumber, agentName, agentEmail, price } = req.body;
+
+      const newProperty = {
+        title,
+        location,
+        image,
+        bedNumber,
+        bathNumber,
+        agentName,
+        agentEmail,
+        price,
+      };
+
+      try
+      {
+        const result = await propertyCollection.insertOne( newProperty );
+        res.status( 201 ).json( result );
+        console.log( result );
+      } catch ( error )
+      {
+        console.error( 'Error adding property:', error );
+        res.status( 500 ).json( { message: 'Internal Server Error' } );
+      }
     } );
 
 
-    app.get( '/wishlist', async ( req, res ) =>
+    // PATCH endpoint to update an existing property by ID
+    app.patch( '/properties/:id', async ( req, res ) =>
+    {
+      const { id } = req.params;
+      const { title, location, image, bedNumber, bathNumber, agentName, agentEmail, price } = req.body;
+
+      const updatedProperty = {
+        ...( title && { title } ),
+        ...( location && { location } ),
+        ...( image && { image } ),
+        ...( bedNumber !== undefined && { bedNumber } ),
+        ...( bathNumber !== undefined && { bathNumber } ),
+        ...( agentName && { agentName } ),
+        ...( agentEmail && { agentEmail } ),
+        ...( price !== undefined && { price } ),
+      };
+
+
+      try
+      {
+        const result = await propertyCollection.findOneAndUpdate(
+          { _id: new ObjectId( id ) },
+          { $set: updatedProperty },
+          { returnOriginal: false }
+        );
+
+        if ( !result.value )
+        {
+          return res.status( 404 ).json( { message: 'Property not found' } );
+        }
+
+        res.status( 200 ).json( result.value );
+      } catch ( error )
+      {
+        console.error( 'Error updating property:', error );
+        res.status( 500 ).json( { message: 'Internal Server Error' } );
+      }
+    } );
+
+
+
+    // Backend API to fetch properties added by the agent
+    app.get( '/properties/agent/:agentEmail', async ( req, res ) =>
+    {
+      try
+      {
+        const { agentEmail } = req.params;
+        const properties = await propertyCollection.find( { agentEmail } ).toArray();
+        res.status( 200 ).json( properties );
+      } catch ( error )
+      {
+        console.error( 'Error fetching properties by agent:', error );
+        res.status( 500 ).json( { message: 'Internal Server Error' } );
+      }
+    } );
+
+
+
+    // Backend API to update a property
+    app.patch( '/properties/:id', async ( req, res ) =>
+    {
+      try
+      {
+        const { id } = req.params;
+        const updatedData = req.body;
+
+        const filter = { _id: new ObjectId( id ) };
+        const updateDoc = {
+          $set: {
+            ...updatedData,
+          },
+        };
+
+        const result = await propertyCollection.updateOne( filter, updateDoc );
+
+        if ( result.modifiedCount === 0 )
+        {
+          return res.status( 404 ).json( { message: 'Property not found' } );
+        }
+
+        res.status( 200 ).json( { message: 'Property updated successfully' } );
+      } catch ( error )
+      {
+        console.error( 'Error updating property:', error );
+        res.status( 500 ).json( { message: 'Internal Server Error' } );
+      }
+    } );
+
+
+    // Backend API to delete a property
+    app.delete( '/properties/:id', async ( req, res ) =>
+    {
+      try
+      {
+        const { id } = req.params;
+
+        const result = await propertyCollection.deleteOne( { _id: new ObjectId( id ) } );
+
+        if ( result.deletedCount === 0 )
+        {
+          return res.status( 404 ).json( { message: 'Property not found' } );
+        }
+
+        res.status( 200 ).json( { message: 'Property deleted successfully' } );
+      } catch ( error )
+      {
+        console.error( 'Error deleting property:', error );
+        res.status( 500 ).json( { message: 'Internal Server Error' } );
+      }
+    } );
+    
+  // Wishlist API - GET
+  app.get( '/wishlist', async ( req, res ) =>
     {
       try
       {
@@ -213,154 +424,230 @@ async function run ()
         res.status( 500 ).json( { message: 'Internal Server Error' } );
       }
     } );
+  
 
-    // DELETE method to remove a wishlist item by propertyId
-    app.delete( '/wishlist/:propertyId', async ( req, res ) =>
+  // Wishlist API - POST
+  app.post( '/wishlist', async ( req, res ) =>
     {
-      const { propertyId } = req.params;
-
-      try
-      {
-        const result = await wishlistCollection.deleteOne( { propertyId } );
-        if ( result.deletedCount === 1 )
-        {
-          res.status( 200 ).json( { message: 'Wishlist item deleted successfully' } );
-        } else
-        {
-          res.status( 404 ).json( { message: 'Wishlist item not found' } );
-        }
-      } catch ( error )
-      {
-        console.error( 'Error deleting wishlist item:', error );
-        res.status( 500 ).json( { message: 'Internal Server Error' } );
-      }
+      const item = req.body;
+      const result = await wishlistCollection.insertOne( item );
+      console.log( result );
+      res.send( result );
     } );
 
 
 
-    // Post method to add a review
-    app.post( '/reviews', async ( req, res ) =>
+
+  // Wishlist API - DELETE
+  // Wishlist API - DELETE
+  app.delete( '/wishlist/:propertyId', async ( req, res ) =>
+  {
+    const { propertyId } = req.params;
+    try
+    {
+      const result = await wishlistCollection.deleteOne( { propertyId } );
+      if ( result.deletedCount === 1 )
+      {
+        res.status( 200 ).json( { message: 'Wishlist item deleted successfully' } );
+      } else
+      {
+        res.status( 404 ).json( { message: 'Wishlist item not found' } );
+      }
+    } catch ( error )
+    {
+      console.error( "Failed to delete wishlist item", error );
+      res.status( 500 ).json( { message: 'Internal Server Error' } );
+    }
+  } );
+
+  
+
+  // Reviews API
+  app.post( '/reviews', async ( req, res ) =>
     {
       try
       {
         const review = req.body;
-        const result = await reviewsCollection.insertOne( review );
+        const result = await reviewCollection.insertOne( review );
         res.status( 201 ).json( result );
       } catch ( error )
       {
-        console.error( 'Error adding review:', error );
         res.status( 500 ).json( { message: 'Internal Server Error' } );
       }
     } );
-
+  
     app.get( '/reviews', async ( req, res ) =>
     {
       try
       {
-
-        const reviewsItems = await reviewsCollection.find().toArray();
+        const reviewsItems = await reviewCollection.find().toArray();
         res.status( 200 ).json( reviewsItems );
-        console.log( reviewsItems );
       } catch ( error )
       {
-        console.error( 'Error fetching reviews:', error );
         res.status( 500 ).json( { message: 'Internal Server Error' } );
       }
     } );
-
-
-    // Delete a review by ID
-    app.delete( '/reviews/:id', async ( req, res ) =>
-    {
-      try
-      {
+  
+    app.delete('/reviews/:id', async (req, res) => {
+      try {
         const reviewId = req.params.id;
-        const result = await reviewsCollection.deleteOne( { _id: new ObjectId( reviewId ) } );
-        if ( result.deletedCount === 1 )
-        {
-          res.status( 200 ).json( { message: 'Review deleted successfully' } );
-        } else
-        {
-          res.status( 404 ).json( { message: 'Review not found' } );
+        const result = await reviewCollection.deleteOne({ _id: new ObjectId(reviewId) });
+        if (result.deletedCount === 1) {
+          res.status(200).json({ message: 'Review deleted successfully' });
+        } else {
+          res.status(404).json({ message: 'Review not found' });
         }
-      } catch ( error )
-      {
-        console.error( 'Error deleting review:', error );
-        res.status( 500 ).json( { message: 'Internal Server Error' } );
+      } catch (error) {
+        console.error('Error deleting review:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
       }
-    } );
+    });
+    
+
+    // offer related api:
+
+    
+// Offers API - GET
+app.get('/offers', async (req, res) => {
+  try {
+    const offers = await offerCollection.find().toArray();
+    res.status(200).json(offers);
+    // console.log(offers);
+  } catch (error) {
+    console.error("Failed to fetch offers", error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
 
 
+    // Offers API - POST
+app.post('/offers', async (req, res) => {
+  const offer = req.body;
+  try {
+    const result = await offerCollection.insertOne(offer);
+    res.status(200).json(result); // Return the inserted document
+    console.log(result);
+  } catch (error) {
+    console.error("Failed to add offer", error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
 
 
+// Update Offer Status API - PATCH
+app.patch('/offers/:offerId/status', async (req, res) => {
+  const { offerId } = req.params;
+  const { status, transactionId } = req.body;
 
-    // // Get method to fetch reviews based on property ID or user email
-    // app.get('/reviews', async (req, res) => {
-    //   try {
-    //     const { propertyId, userEmail } = req.query;
-    //     let query = {};
-    //     if (propertyId) query.propertyId = propertyId;
-    //     if (userEmail) query.userEmail = userEmail;
+  try {
+    const updateData = { status };
+    if (transactionId) {
+      updateData.transactionId = transactionId;
+    }
 
-    //     const reviews = await reviewCollection.find(query).toArray();
-    //     res.status(200).json(reviews);
-    //   } catch (error) {
-    //     console.error('Error fetching reviews:', error);
-    //     res.status(500).json({ message: 'Internal Server Error' });
-    //   }
-    // });
+    const result = await offersCollection.updateOne(
+      { _id: new ObjectId(offerId) },
+      { $set: updateData }
+    );
+
+    if (result.modifiedCount === 1) {
+      res.status(200).json({ message: 'Offer status updated successfully' });
+    } else {
+      res.status(404).json({ message: 'Offer not found' });
+    }
+  } catch (error) {
+    console.error('Failed to update offer status', error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
 
 
+// Offers API - DELETE
+app.delete('/offers/:offerId', async (req, res) => {
+  const { offerId } = req.params;
+  try {
+    const result = await offersCollection.deleteOne({ _id: new ObjectId(offerId) });
+    if (result.deletedCount === 1) {
+      res.status(200).json({ message: 'Offer deleted successfully' });
+    } else {
+      res.status(404).json({ message: 'Offer not found' });
+    }
+  } catch (error) {
+    console.error("Failed to delete offer", error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
 
 
-
-    // Get method to access one property 
-    app.get( '/properties/:id', async ( req, res ) =>
+    // Fetch Requested/Offered Properties
+    app.get( '/requested-offered-properties/:agentEmail', async ( req, res ) =>
     {
       try
       {
-        const id = req.params.id;
-
-        const query = { _id: new ObjectId( id ) }
-        const property = await propertyCollection.findOne( query );
-        // res.send(result);
-        // const property = await propertyCollection.findOne( { _id: new ObjectId( id ) } );
-
-        if ( !property )
-        {
-          return res.status( 404 ).json( { message: 'Property not found' } ); // Corrected message
-        }
-        res.status( 200 ).json( property );
-        // console.log( 'This is one property:', property );
-
+        const { agentEmail } = req.params;
+        const properties = await requestedOfferedCollection.find( { agentEmail } ).toArray();
+        res.status( 200 ).json( properties );
       } catch ( error )
       {
-        console.error( 'Error fetching property:', error );
+        console.error( 'Error fetching requested/offered properties:', error );
         res.status( 500 ).json( { message: 'Internal Server Error' } );
       }
     } );
 
+    // Accept Offer
+    app.patch( '/requested-offered-properties/:propertyId/accept', async ( req, res ) =>
+    {
+      try
+      {
+        const { propertyId } = req.params;
+        const filter = { _id: new ObjectId( propertyId ) };
+        const updateDoc = { $set: { status: 'accepted' } };
+        const result = await requestedOfferedCollection.updateOne( filter, updateDoc );
+        res.status( 200 ).json( result );
+      } catch ( error )
+      {
+        console.error( 'Error accepting offer:', error );
+        res.status( 500 ).json( { message: 'Internal Server Error' } );
+      }
+    } );
 
+    // Reject Offer
+    app.patch( '/requested-offered-properties/:propertyId/reject', async ( req, res ) =>
+    {
+      try
+      {
+        const { propertyId } = req.params;
+        const filter = { _id: new ObjectId( propertyId ) };
+        const updateDoc = { $set: { status: 'rejected' } };
+        const result = await requestedOfferedCollection.updateOne( filter, updateDoc );
+        res.status( 200 ).json( result );
+      } catch ( error )
+      {
+        console.error( 'Error rejecting offer:', error );
+        res.status( 500 ).json( { message: 'Internal Server Error' } );
+      }
+    } );
 
-
-
-
-    // await client.db( "admin" ).command( { ping: 1 } );
     console.log( "Pinged your deployment. You successfully connected to MongoDB!" );
-  } finally
+  } catch ( error )
   {
-    // Ensures that the client will close when you finish/error
-    // await client.close();
+    console.error( 'Error connecting to MongoDB:', error );
   }
+
+
+
 }
+
+console.log( "Pinged your deployment. You successfully connected to MongoDB!" );
+
 run().catch( console.dir );
 
 app.get( '/', ( req, res ) =>
 {
-  res.send( `Realtor is running @ PORT ${ port }` )
-} )
+  res.send( 'Realtor is running ' );
+} );
 
 app.listen( port, () =>
 {
   console.log( `Realtor is running on port ${ port }` );
-} )
+} );
