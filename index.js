@@ -53,11 +53,12 @@ async function run ()
     const reviewCollection = client.db( "realestateDB" ).collection( "reviews" );
     const userCollection = client.db( "realestateDB" ).collection( 'users' );
     const requestedOfferedCollection = client.db( "realestateDB" ).collection( "requestedOffered" );
-    
-    const  offerCollection = client.db( "realestateDB" ).collection( "offers" );
+    const offerCollection = client.db( "realestateDB" ).collection( "offers" );
+    const blogCollection = client.db( "realestateDB" ).collection( "blogs" );
+    const testimonialCollection = client.db( "realestateDB" ).collection( "testimonials" );
 
-    const paymentCollection = client.db("bistroDb").collection("payments");
-    
+    const paymentCollection = client.db( "bistroDb" ).collection( "payments" );
+
 
 
     // JWT related API
@@ -269,7 +270,7 @@ async function run ()
       }
     } );
 
-    // POST endpoint to add a new property
+    // POST add a new property
     app.post( '/properties', async ( req, res ) =>
     {
       const { title, location, image, bedNumber, bathNumber, agentName, agentEmail, price } = req.body;
@@ -408,9 +409,9 @@ async function run ()
         res.status( 500 ).json( { message: 'Internal Server Error' } );
       }
     } );
-    
-  // Wishlist API - GET
-  app.get( '/wishlist', async ( req, res ) =>
+
+    // Wishlist API - GET
+    app.get( '/wishlist', async ( req, res ) =>
     {
       try
       {
@@ -424,10 +425,10 @@ async function run ()
         res.status( 500 ).json( { message: 'Internal Server Error' } );
       }
     } );
-  
 
-  // Wishlist API - POST
-  app.post( '/wishlist', async ( req, res ) =>
+
+    // Wishlist API - POST
+    app.post( '/wishlist', async ( req, res ) =>
     {
       const item = req.body;
       const result = await wishlistCollection.insertOne( item );
@@ -438,32 +439,32 @@ async function run ()
 
 
 
-  // Wishlist API - DELETE
-  // Wishlist API - DELETE
-  app.delete( '/wishlist/:propertyId', async ( req, res ) =>
-  {
-    const { propertyId } = req.params;
-    try
+    // Wishlist API - DELETE
+    // Wishlist API - DELETE
+    app.delete( '/wishlist/:propertyId', async ( req, res ) =>
     {
-      const result = await wishlistCollection.deleteOne( { propertyId } );
-      if ( result.deletedCount === 1 )
+      const { propertyId } = req.params;
+      try
       {
-        res.status( 200 ).json( { message: 'Wishlist item deleted successfully' } );
-      } else
+        const result = await wishlistCollection.deleteOne( { propertyId } );
+        if ( result.deletedCount === 1 )
+        {
+          res.status( 200 ).json( { message: 'Wishlist item deleted successfully' } );
+        } else
+        {
+          res.status( 404 ).json( { message: 'Wishlist item not found' } );
+        }
+      } catch ( error )
       {
-        res.status( 404 ).json( { message: 'Wishlist item not found' } );
+        console.error( "Failed to delete wishlist item", error );
+        res.status( 500 ).json( { message: 'Internal Server Error' } );
       }
-    } catch ( error )
-    {
-      console.error( "Failed to delete wishlist item", error );
-      res.status( 500 ).json( { message: 'Internal Server Error' } );
-    }
-  } );
+    } );
 
-  
 
-  // Reviews API
-  app.post( '/reviews', async ( req, res ) =>
+
+    // Reviews API
+    app.post( '/reviews', async ( req, res ) =>
     {
       try
       {
@@ -475,7 +476,7 @@ async function run ()
         res.status( 500 ).json( { message: 'Internal Server Error' } );
       }
     } );
-  
+
     app.get( '/reviews', async ( req, res ) =>
     {
       try
@@ -487,96 +488,118 @@ async function run ()
         res.status( 500 ).json( { message: 'Internal Server Error' } );
       }
     } );
-  
-    app.delete('/reviews/:id', async (req, res) => {
-      try {
+
+    app.delete( '/reviews/:id', async ( req, res ) =>
+    {
+      try
+      {
         const reviewId = req.params.id;
-        const result = await reviewCollection.deleteOne({ _id: new ObjectId(reviewId) });
-        if (result.deletedCount === 1) {
-          res.status(200).json({ message: 'Review deleted successfully' });
-        } else {
-          res.status(404).json({ message: 'Review not found' });
+        const result = await reviewCollection.deleteOne( { _id: new ObjectId( reviewId ) } );
+        if ( result.deletedCount === 1 )
+        {
+          res.status( 200 ).json( { message: 'Review deleted successfully' } );
+        } else
+        {
+          res.status( 404 ).json( { message: 'Review not found' } );
         }
-      } catch (error) {
-        console.error('Error deleting review:', error);
-        res.status(500).json({ message: 'Internal Server Error' });
+      } catch ( error )
+      {
+        console.error( 'Error deleting review:', error );
+        res.status( 500 ).json( { message: 'Internal Server Error' } );
       }
-    });
-    
+    } );
+
 
     // offer related api:
 
-    
-// Offers API - GET
-app.get('/offers', async (req, res) => {
-  try {
-    const offers = await offerCollection.find().toArray();
-    res.status(200).json(offers);
-    // console.log(offers);
-  } catch (error) {
-    console.error("Failed to fetch offers", error);
-    res.status(500).json({ message: 'Internal Server Error' });
-  }
-});
+
+    // Offers API - GET
+    app.get( '/offers', async ( req, res ) =>
+    {
+      try
+      {
+        const offers = await offerCollection.find().toArray();
+        res.status( 200 ).json( offers );
+        // console.log(offers);
+      } catch ( error )
+      {
+        console.error( "Failed to fetch offers", error );
+        res.status( 500 ).json( { message: 'Internal Server Error' } );
+      }
+    } );
 
 
     // Offers API - POST
-app.post('/offers', async (req, res) => {
-  const offer = req.body;
-  try {
-    const result = await offerCollection.insertOne(offer);
-    res.status(200).json(result); // Return the inserted document
-    console.log(result);
-  } catch (error) {
-    console.error("Failed to add offer", error);
-    res.status(500).json({ message: 'Internal Server Error' });
-  }
-});
+    app.post( '/offers', async ( req, res ) =>
+    {
+      const offer = req.body;
+      try
+      {
+        const result = await offerCollection.insertOne( offer );
+        res.status( 200 ).json( result ); // Return the inserted document
+        console.log( result );
+      } catch ( error )
+      {
+        console.error( "Failed to add offer", error );
+        res.status( 500 ).json( { message: 'Internal Server Error' } );
+      }
+    } );
 
 
-// Update Offer Status API - PATCH
-app.patch('/offers/:offerId/status', async (req, res) => {
-  const { offerId } = req.params;
-  const { status, transactionId } = req.body;
+    // Update Offer Status API - PATCH
+    app.patch( '/offers/:offerId/status', async ( req, res ) =>
+    {
+      const { offerId } = req.params;
+      const { status, transactionId } = req.body;
 
-  try {
-    const updateData = { status };
-    if (transactionId) {
-      updateData.transactionId = transactionId;
-    }
+      try
+      {
+        const updateData = { status };
+        if ( transactionId )
+        {
+          updateData.transactionId = transactionId;
+        }
 
-    const result = await offersCollection.updateOne(
-      { _id: new ObjectId(offerId) },
-      { $set: updateData }
-    );
+        const result = await offersCollection.updateOne(
+          { _id: new ObjectId( offerId ) },
+          { $set: updateData }
+        );
 
-    if (result.modifiedCount === 1) {
-      res.status(200).json({ message: 'Offer status updated successfully' });
-    } else {
-      res.status(404).json({ message: 'Offer not found' });
-    }
-  } catch (error) {
-    console.error('Failed to update offer status', error);
-    res.status(500).json({ message: 'Internal Server Error' });
-  }
-});
+        if ( result.modifiedCount === 1 )
+        {
+          res.status( 200 ).json( { message: 'Offer status updated successfully' } );
+        } else
+        {
+          res.status( 404 ).json( { message: 'Offer not found' } );
+        }
+      } catch ( error )
+      {
+        console.error( 'Failed to update offer status', error );
+        res.status( 500 ).json( { message: 'Internal Server Error' } );
+      }
+    } );
 
 
-// Offers API - DELETE
-app.delete('/offers/:offerId', async (req, res) => {
-  const { offerId } = req.params;
-  try {
-    const result = await offersCollection.deleteOne({ _id: new ObjectId(offerId) });
-    if (result.deletedCount === 1) {
-      res.status(200).json({ message: 'Offer deleted successfully' });
-    } else {
-      res.status(404).json({ message: 'Offer not found' });
-    }
-  } catch (error) {
-    console.error("Failed to delete offer", error);
-    res.status(500).json({ message: 'Internal Server Error' });
-  }
-});
+    // Offers API - DELETE
+    app.delete( '/offers/:offerId', async ( req, res ) =>
+    {
+      const { offerId } = req.params;
+      try
+      {
+        const result = await offersCollection.deleteOne( { _id: new ObjectId( offerId ) } );
+        if ( result.deletedCount === 1 )
+        {
+          res.status( 200 ).json( { message: 'Offer deleted successfully' } );
+        } else
+        {
+          res.status( 404 ).json( { message: 'Offer not found' } );
+        }
+      } catch ( error )
+      {
+        console.error( "Failed to delete offer", error );
+        res.status( 500 ).json( { message: 'Internal Server Error' } );
+      }
+    } );
 
 
     // Fetch Requested/Offered Properties
@@ -628,6 +651,22 @@ app.delete('/offers/:offerId', async (req, res) => {
       }
     } );
 
+    // blogs related a
+
+    app.get( '/blogs', async ( req, res ) =>
+    {
+      try
+      {
+        const blogs = await blogCollection.find( {} ).toArray();
+        res.status( 200 ).json( blogs );
+      } catch ( error )
+      {
+        console.error( 'Error fetching blogs:', error );
+        res.status( 500 ).json( { message: 'An error occurred while fetching blogs.' } );
+      }
+    } );
+
+
     console.log( "Pinged your deployment. You successfully connected to MongoDB!" );
   } catch ( error )
   {
@@ -638,7 +677,6 @@ app.delete('/offers/:offerId', async (req, res) => {
 
 }
 
-console.log( "Pinged your deployment. You successfully connected to MongoDB!" );
 
 run().catch( console.dir );
 
