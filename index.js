@@ -44,8 +44,8 @@ async function run ()
   try
   {
     // Connect to MongoDB
-    await client.connect();
-    console.log( "Connected to MongoDB" );
+    // await client.connect();
+    // console.log( "Connected to MongoDB" );
 
     // Database Collections
     const propertyCollection = client.db( "realestateDB" ).collection( "properties" );
