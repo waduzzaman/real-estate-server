@@ -15,9 +15,10 @@ app.use(
     origin: [
       "http://localhost:5173",
       "http://localhost:5000",
-      "https://real-estate-server-mu.vercel.app/",      
-      "https://real-estate-client-b69c6.web.app/",
-      "https://real-estate-client-b69c6.firebaseapp.com/"
+      "https://real-estate-server-mu.vercel.app",  
+       
+      "https://real-estate-client-b69c6.web.app",
+      "https://real-estate-client-b69c6.firebaseapp.com"
     ],
     credentials: true,
   } )
