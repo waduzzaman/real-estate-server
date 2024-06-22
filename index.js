@@ -15,7 +15,7 @@ app.use(
     origin: [
       "http://localhost:5173",
       "http://localhost:5000",
-      "https://real-estate-server-nu.vercel.app/",
+      "https://real-estate-server-mu.vercel.app/",      
       "https://real-estate-client-b69c6.firebaseapp.com/",
       "https://real-estate-client-b69c6.web.app/"
     ],
@@ -136,7 +136,7 @@ async function run ()
 
       const query = { email: email };
       const user = await userCollection.findOne( query );
-      console.log(user);
+      // console.log(user);
       let admin = false;
       if ( user )
       {
@@ -148,24 +148,24 @@ async function run ()
     // get agent: 
 
     app.get( '/users/agent/:email', async ( req, res ) =>
+    {
+      const email = req.params.email;
+
+      // if ( email !== req.decoded.email )
+      // {
+      //   return res.status( 403 ).send( { message: 'forbidden access' } )
+      // }
+
+      const query = { email: email };
+      const user = await userCollection.findOne( query );
+      // console.log(user);
+      let agent = false;
+      if ( user )
       {
-        const email = req.params.email;
-  
-        // if ( email !== req.decoded.email )
-        // {
-        //   return res.status( 403 ).send( { message: 'forbidden access' } )
-        // }
-  
-        const query = { email: email };
-        const user = await userCollection.findOne( query );
-        console.log(user);
-        let agent = false;
-        if ( user )
-        {
-          agent = user?.role === 'agent';
-        }
-        res.send( { agent } );
-      } )
+        agent = user?.role === 'agent';
+      }
+      res.send( { agent } );
+    } )
 
 
     app.post( '/users', async ( req, res ) =>
@@ -182,7 +182,7 @@ async function run ()
     } );
 
     // Change User Role API
-    app.patch( '/users/:id/role',  async ( req, res ) =>
+    app.patch( '/users/:id/role', async ( req, res ) =>
     {
       const id = req.params.id;
       const { role } = req.body;
@@ -197,30 +197,35 @@ async function run ()
     } );
 
     // Delete User
-    
-    app.delete('/users/:id',  verifyToken, verifyAdmin, async (req, res) => {
+
+    app.delete( '/users/:id', verifyToken, verifyAdmin, async ( req, res ) =>
+    {
       const id = req.params.id;
-    
+
       // Check if the ID is a valid ObjectId
-      if (!ObjectId.isValid(id)) {
-        return res.status(400).send({ message: 'Invalid ID format' });
+      if ( !ObjectId.isValid( id ) )
+      {
+        return res.status( 400 ).send( { message: 'Invalid ID format' } );
       }
-    
-      const query = { _id: new ObjectId(id) };
-    
-      try {
-        const result = await userCollection.deleteOne(query);
-    
-        if (result.deletedCount === 0) {
-          return res.status(404).send({ message: 'User not found' });
+
+      const query = { _id: new ObjectId( id ) };
+
+      try
+      {
+        const result = await userCollection.deleteOne( query );
+
+        if ( result.deletedCount === 0 )
+        {
+          return res.status( 404 ).send( { message: 'User not found' } );
         }
-    
-        res.send({ message: 'User deleted successfully', result });
-      } catch (error) {
-        console.error('Error deleting user:', error);
-        res.status(500).send({ message: 'An error occurred while deleting the user' });
+
+        res.send( { message: 'User deleted successfully', result } );
+      } catch ( error )
+      {
+        console.error( 'Error deleting user:', error );
+        res.status( 500 ).send( { message: 'An error occurred while deleting the user' } );
       }
-    });
+    } );
 
     //  fetch admin profile information
     app.get( '/admin/profile', verifyAdmin, verifyToken, async ( req, res ) =>
@@ -313,7 +318,7 @@ async function run ()
     } );
 
     // POST add a new property
-    app.post( '/properties', async ( req, res ) =>
+    app.post( '/properties', verifyToken, verifyAgent, async ( req, res ) =>
     {
       const { title, location, image, bedNumber, bathNumber, agentName, agentEmail, price } = req.body;
 
@@ -381,21 +386,41 @@ async function run ()
     } );
 
 
-
-    // Backend API to fetch properties added by the agent
-    app.get( '/properties/agent/:agentEmail', async ( req, res ) =>
-    {
-      try
-      {
-        const { agentEmail } = req.params;
-        const properties = await propertyCollection.find( { agentEmail } ).toArray();
-        res.status( 200 ).json( properties );
-      } catch ( error )
-      {
-        console.error( 'Error fetching properties by agent:', error );
-        res.status( 500 ).json( { message: 'Internal Server Error' } );
+    app.delete('/properties/:id', async (req, res) => {
+      try {
+        const id = req.params.id;
+        const result = await propertyCollection.deleteOne({ _id: new ObjectId(id) });
+        if (result.deletedCount === 1) {
+          res.status(200).json({ message: 'Property deleted successfully' });
+        } else {
+          res.status(404).json({ message: 'Property not found' });
+        }
+      } catch (error) {
+        console.error('Error deleting property:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
       }
-    } );
+    });
+    
+
+
+
+// Backend API to fetch properties added by the agent
+app.get('/properties/agent/:agentEmail', async (req, res) => {
+  try {
+    const { agentEmail } = req.params;
+    const properties = await propertyCollection.find({ agentEmail }).toArray();
+    res.status(200).json(properties);
+    console.log('property with agent email', properties)
+  } catch (error) {
+    console.error('Error fetching properties by agent:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+
+
+
+
 
 
 
@@ -451,6 +476,117 @@ async function run ()
         res.status( 500 ).json( { message: 'Internal Server Error' } );
       }
     } );
+
+    // Verify property
+    app.patch( '/properties/:id/verify', verifyToken, verifyAdmin, async ( req, res ) =>
+    {
+      try
+      {
+        const result = await propertiesCollection.updateOne(
+          { _id: new ObjectId( req.params.id ) },
+          { $set: { status: 'verified' } }
+        );
+        if ( result.modifiedCount > 0 )
+        {
+          res.json( { message: 'Property verified successfully' } );
+        } else
+        {
+          res.status( 404 ).json( { message: 'Property not found' } );
+        }
+      } catch ( error )
+      {
+        res.status( 500 ).json( { message: 'Error verifying property', error } );
+      }
+    } );
+
+    // Reject property
+    app.patch( '/properties/:id/reject', verifyToken, verifyAdmin, async ( req, res ) =>
+    {
+      try
+      {
+        const result = await propertiesCollection.updateOne(
+          { _id: new ObjectId( req.params.id ) },
+          { $set: { status: 'rejected' } }
+        );
+        if ( result.modifiedCount > 0 )
+        {
+          res.json( { message: 'Property rejected successfully' } );
+        } else
+        {
+          res.status( 404 ).json( { message: 'Property not found' } );
+        }
+      } catch ( error )
+      {
+        res.status( 500 ).json( { message: 'Error rejecting property', error } );
+      }
+    } );
+
+  
+    // Delete property
+    app.delete( '/properties/:id', verifyToken, verifyAdmin, async ( req, res ) =>
+    {
+      try
+      {
+        const result = await propertyCollection.deleteOne( { _id: new ObjectId( req.params.id ) } );
+        if ( result.deletedCount > 0 )
+        {
+          res.json( { message: 'Property deleted successfully' } );
+        } else
+        {
+          res.status( 404 ).json( { message: 'Property not found' } );
+        }
+      } catch ( error )
+      {
+        res.status( 500 ).json( { message: 'Error deleting property', error } );
+      }
+    } );
+
+
+
+
+    // Update property
+    app.patch( '/properties/:id', verifyToken, verifyAgent, async ( req, res ) =>
+    {
+      try
+      {
+        const result = await propertyCollection.updateOne(
+          { _id: new ObjectId( req.params.id ) },
+          { $set: req.body }
+        );
+        if ( result.modifiedCount > 0 )
+        {
+          res.json( { message: 'Property updated successfully' } );
+        } else
+        {
+          res.status( 404 ).json( { message: 'Property not found' } );
+        }
+      } catch ( error )
+      {
+        res.status( 500 ).json( { message: 'Error updating property', error } );
+      }
+    } );
+
+    // Endpoint to fetch properties by agent email
+    app.get( '/properties/agent/:agentEmail', verifyToken, verifyAgent, async ( req, res ) =>
+    {
+      const { agentEmail } = req.params;
+
+      try
+      {
+        // Assuming propertyCollection is your MongoDB collection
+        const properties = await propertyCollection.find( { agentEmail } ).toArray();
+
+        res.json( properties );
+      } catch ( error )
+      {
+        console.error( 'Error fetching properties by agent email:', error );
+        res.status( 500 ).json( { message: 'Error fetching properties', error } );
+      }
+    } );
+
+
+
+
 
     // Wishlist API - GET
     app.get( '/wishlist', async ( req, res ) =>
@@ -519,12 +655,13 @@ async function run ()
       }
     } );
 
-    app.get( '/reviews', async ( req, res ) =>
+    app.get( '/reviews', async  ( req, res ) =>
     {
       try
       {
         const reviewsItems = await reviewCollection.find().toArray();
         res.status( 200 ).json( reviewsItems );
+        console.log(reviewsItems);
       } catch ( error )
       {
         res.status( 500 ).json( { message: 'Internal Server Error' } );
