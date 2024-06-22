@@ -586,9 +586,38 @@ app.get('/properties/agent/:agentEmail', async (req, res) => {
     } );
 
 
+// Endpoint to fetch all wishlist items
+app.get('/wishlist', async (req, res) => {
+  try {
+    const wishlistItems = await wishlistCollection.find().toArray();
+
+    res.status(200).json(wishlistItems);
+  } catch (error) {
+    console.error('Error fetching wishlist items:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
 
 
 
+    app.get('/wishlist/:propertyId', async (req, res) => {
+      
+    
+      try {
+        const propertyId = req.params.propertyId;
+        const query = { _id: new ObjectId( propertyId ) };
+        const wishlistItem = await wishlistCollection.findOne({ query});
+    
+        if (!wishlistItem) {
+          return res.status(404).json({ message: 'Wishlist item not found' });
+        }
+    
+        res.status(200).json(wishlistItem);
+      } catch (error) {
+        console.error('Error fetching wishlist item:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+      }
+    });
 
 
     // Wishlist API - POST
@@ -600,29 +629,7 @@ app.get('/properties/agent/:agentEmail', async (req, res) => {
       res.send( result );
     } );
 
-    // Wishlist API - GET by propertyId
-app.get('/wishlist/:propertyId', async (req, res) => {
-  const propertyId = req.params.propertyId;
 
-  try {
-    const wishlistItem = await wishlistCollection.findOne({ propertyId: propertyId });
-
-    if (!wishlistItem) {
-      return res.status(404).json({ message: 'Wishlist item not found' });
-    }
-
-    res.status(200).json(wishlistItem);
-  } catch (error) {
-    console.error('Error fetching wishlist item:', error);
-    res.status(500).json({ message: 'Internal Server Error' });
-  }
-});
-
-
-
-
-
-    // Wishlist API - DELETE
     // Wishlist API - DELETE
     app.delete( '/wishlist/:propertyId', async ( req, res ) =>
     {
@@ -690,15 +697,12 @@ app.get('/wishlist/:propertyId', async (req, res) => {
         console.error('Error fetching review:', error);
         res.status(500).json({ message: 'Internal Server Error' });
       }
-    });
-
-
-       
+    });      
 
 
  
 
-    app.delete( '/reviews/:id', async ( req, res ) =>
+    app.delete( '/reviews/:id', verifyToken, verifyAdmin, async ( req, res ) =>
     {
       try
       {
