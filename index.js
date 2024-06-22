@@ -65,7 +65,7 @@ async function run ()
     app.post( '/jwt', async ( req, res ) =>
     {
       const user = req.body;
-      const token = jwt.sign( user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' } );
+      const token = jwt.sign( user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '2h' } );
       res.send( { token } );
     } );
 
@@ -123,17 +123,20 @@ async function run ()
       res.send( result );
     } );
 
-    app.get( '/users/admin/:email', verifyToken, async ( req, res ) =>
+    // Get Admin 
+
+    app.get( '/users/admin/:email', async ( req, res ) =>
     {
       const email = req.params.email;
 
-      if ( email !== req.decoded.email )
-      {
-        return res.status( 403 ).send( { message: 'forbidden access' } )
-      }
+      // if ( email !== req.decoded.email )
+      // {
+      //   return res.status( 403 ).send( { message: 'forbidden access' } )
+      // }
 
       const query = { email: email };
       const user = await userCollection.findOne( query );
+      console.log(user);
       let admin = false;
       if ( user )
       {
@@ -141,6 +144,28 @@ async function run ()
       }
       res.send( { admin } );
     } )
+
+    // get agent: 
+
+    app.get( '/users/agent/:email', async ( req, res ) =>
+      {
+        const email = req.params.email;
+  
+        // if ( email !== req.decoded.email )
+        // {
+        //   return res.status( 403 ).send( { message: 'forbidden access' } )
+        // }
+  
+        const query = { email: email };
+        const user = await userCollection.findOne( query );
+        console.log(user);
+        let agent = false;
+        if ( user )
+        {
+          agent = user?.role === 'agent';
+        }
+        res.send( { agent } );
+      } )
 
 
     app.post( '/users', async ( req, res ) =>
@@ -157,7 +182,7 @@ async function run ()
     } );
 
     // Change User Role API
-    app.patch( '/users/:id/role', verifyToken, verifyAdmin, async ( req, res ) =>
+    app.patch( '/users/:id/role',  async ( req, res ) =>
     {
       const id = req.params.id;
       const { role } = req.body;
@@ -172,13 +197,30 @@ async function run ()
     } );
 
     // Delete User
-    app.delete( '/users/:id', verifyAdmin, verifyToken, async ( req, res ) =>
-    {
+    
+    app.delete('/users/:id',  verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
-      const query = { _id: new ObjectId( id ) };
-      const result = await userCollection.deleteOne( query );
-      res.send( result );
-    } );
+    
+      // Check if the ID is a valid ObjectId
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).send({ message: 'Invalid ID format' });
+      }
+    
+      const query = { _id: new ObjectId(id) };
+    
+      try {
+        const result = await userCollection.deleteOne(query);
+    
+        if (result.deletedCount === 0) {
+          return res.status(404).send({ message: 'User not found' });
+        }
+    
+        res.send({ message: 'User deleted successfully', result });
+      } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).send({ message: 'An error occurred while deleting the user' });
+      }
+    });
 
     //  fetch admin profile information
     app.get( '/admin/profile', verifyAdmin, verifyToken, async ( req, res ) =>
@@ -667,12 +709,61 @@ async function run ()
     } );
 
 
+    app.get( '/testimonials', async ( req, res ) =>
+    {
+      try
+      {
+        const testimonials = await testimonialCollection.find( {} ).toArray();
+        res.status( 200 ).json( testimonials );
+      } catch ( error )
+      {
+        console.error( 'Error fetching testimonials:', error );
+        res.status( 500 ).json( { message: 'An error occurred while fetching testimonials.' } );
+      }
+    } );
+
+    // Get a single testimonial by ID
+    app.get( '/testimonials/:id', async ( req, res ) =>
+    {
+      const id = req.params.id;
+      try
+      {
+        const testimonial = await testimonialCollection.findOne( { _id: new ObjectId( id ) } );
+        if ( !testimonial )
+        {
+          return res.status( 404 ).json( { message: 'Testimonial not found' } );
+        }
+        res.status( 200 ).json( testimonial );
+      } catch ( error )
+      {
+        console.error( 'Error fetching testimonial:', error );
+        res.status( 500 ).json( { message: 'An error occurred while fetching the testimonial.' } );
+      }
+    } );
+
+    // Create a new testimonial
+    app.post( '/testimonials', async ( req, res ) =>
+    {
+      const newTestimonial = req.body;
+      try
+      {
+        const result = await testimonialCollection.insertOne( newTestimonial );
+        res.status( 201 ).json( result.ops[ 0 ] );
+      } catch ( error )
+      {
+        console.error( 'Error creating testimonial:', error );
+        res.status( 500 ).json( { message: 'An error occurred while creating the testimonial.' } );
+      }
+    } );
+
+
+
+
     console.log( "Pinged your deployment. You successfully connected to MongoDB!" );
   } catch ( error )
   {
     console.error( 'Error connecting to MongoDB:', error );
   }
-
 
 
 }
