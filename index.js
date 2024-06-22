@@ -645,6 +645,21 @@ app.get('/wishlist/:propertyId', async (req, res) => {
     } );
 
 
+    app.get('/reviews', async (req, res) => {
+      try {
+        const reviews = await reviewCollection.find({}).toArray();
+    
+        if (!reviews || reviews.length === 0) {
+          return res.status(404).json({ message: 'No reviews found' });
+        }
+    
+        res.status(200).json(reviews);
+      } catch (error) {
+        console.error('Error fetching reviews:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+      }
+    });
+    
 
     // Reviews API
     app.post( '/reviews', async ( req, res ) =>
@@ -660,27 +675,12 @@ app.get('/wishlist/:propertyId', async (req, res) => {
       }
     } );
 
-    app.get('/reviews/:id', async (req, res) => {
-      const id = req.params.id;
+    app.get('/reviews/:propertyId', async (req, res) => {
+      const propertyId = req.params.propertyId;
+      
       try {
-        const review = await reviewCollection.findOne({ _id: new ObjectId(id) });
-    
-        if (!review) {
-          return res.status(404).json({ message: 'Review not found' });
-        }
-    
-        res.status(200).json(review);
-      } catch (error) {
-        console.error('Error fetching review:', error);
-        res.status(500).json({ message: 'Internal Server Error' });
-      }
-    });
-
-    app.get('/reviews', async (req, res) => {
-      const id = req.params.id;
-      try {
-        const review = await reviewCollection.findOne({ _id: new ObjectId(id) });
-    
+        const review = await reviewCollection.findOne({ propertyId: propertyId });
+        
         if (!review) {
           return res.status(404).json({ message: 'Review not found' });
         }
