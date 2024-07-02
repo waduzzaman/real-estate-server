@@ -586,6 +586,8 @@ app.get('/properties/agent/:agentEmail', async (req, res) => {
     } );
 
 
+
+    
 // Endpoint to fetch all wishlist items
 app.get('/wishlist', async (req, res) => {
   try {
@@ -621,13 +623,41 @@ app.get('/wishlist', async (req, res) => {
 
 
     // Wishlist API - POST
-    app.post( '/wishlist', async ( req, res ) =>
-    {
-      const item = req.body;
-      const result = await wishlistCollection.insertOne( item );
-      console.log( result );
-      res.send( result );
-    } );
+    // app.post( '/wishlist', async ( req, res ) =>
+    // {
+    //   const item = req.body;
+    //   const result = await wishlistCollection.insertOne( item );
+    //   console.log( result );
+    //   res.send( result );
+    // } );
+
+   
+      app.post( '/wishlist', async ( req, res ) =>
+        {
+          try
+          {
+            const wishlist = req.body;
+            const result = await reviewCollection.insertOne( wishlist );
+            res.status( 201 ).json( result );
+            console.log('update one', result);
+          } catch ( error )
+          {
+            res.status( 500 ).json( { message: 'Internal Server Error' } );
+          }
+        } );
+
+        app.get('/wishlist/:userEmail', async (req, res) => {
+          try {
+            const userEmail = req.params.userEmail;
+            const wishlistItems = await wishlistCollection.find({ userEmail }).toArray();
+            res.status(200).json(wishlistItems);
+          } catch (error) {
+            console.error('Error fetching wishlist items:', error);
+            res.status(500).json({ message: 'Internal Server Error' });
+          }
+        });
+        
+    
 
 
     // Wishlist API - DELETE
@@ -651,6 +681,33 @@ app.get('/wishlist', async (req, res) => {
       }
     } );
 
+
+
+
+// app.delete( '/wishlist/:propertyId', async ( req, res ) =>
+//   {
+//     const { propertyId } = req.params;
+//     try
+//     {
+//       const result = await wishlistCollection.deleteOne( { propertyId } );
+//       if ( result.deletedCount === 1 )
+//       {
+//         res.status( 200 ).json( { message: 'Wishlist item deleted successfully' } );
+//       } else
+//       {
+//         res.status( 404 ).json( { message: 'Wishlist item not found' } );
+//       }
+//     } catch ( error )
+//     {
+//       console.error( "Failed to delete wishlist item", error );
+//       res.status( 500 ).json( { message: 'Internal Server Error' } );
+//     }
+//   } );
+
+
+
+
+// Review related apis:
 
     app.get('/reviews', async (req, res) => {
       try {
@@ -743,7 +800,7 @@ app.get('/wishlist', async (req, res) => {
 
 
     // Offers API - POST
-    app.post( '/offers', async ( req, res ) =>
+    app.post( '/offers', verifyToken, async ( req, res ) =>
     {
       const offer = req.body;
       try
